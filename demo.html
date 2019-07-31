@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <title>身份证阅读器Web版 - Power by 明珠玮玉</title>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+    <script type="text/javascript">
+        var conn;
+        var s = false;
+        //读取摄像头内容
+        function openCamera() {
+            //预览摄像头
+            console.log(s);
+            if(!s){
+                getCamare();
+            }
+        };
+        //预览摄像头
+        function getCamare() {
+            if (window["WebSocket"]) {
+                conn = new WebSocket("ws://127.0.0.1:9000/capture");
+                conn.onclose = function (evt) {
+                    s = false;
+                    console.log("关闭"+s);
+                    var item = document.createElement("div");
+                    item.innerHTML = "<b>服务未启用</b>";
+                    document.getElementById("log").appendChild(item);
+
+                };
+                conn.onmessage = function (evt) {
+                    s = true;
+                    console.log("接受"+s);
+                    var messages = evt.data.split('\n');
+                    for (var i = 0; i < messages.length; i++) {
+                        var ret = JSON.parse(messages[i])
+                        document.getElementById("Capture").src = ret.data;
+                    }
+                };
+            } else {
+                var item = document.createElement("div");
+                item.innerHTML = "<b>您的浏览器不支持WebSockets.</b>";
+                document.getElementById("log").appendChild(item);
+
+            }
+
+        }
+        //关闭摄像头
+        function closeCamera() {
+            ajax({
+                url: "http://127.0.0.1:9000",              //请求地址
+                type: "POST",                       //请求方式
+                data: { action: "--CloseCamera" },        //请求参数
+                dataType: "json",
+                success: function (response, xml) {
+                    s = false;
+                    // 此处放成功后执行的代码
+                    var ret = JSON.parse(response)
+                    var item = document.createElement("div");
+                    item.innerHTML = "<b>" + ret.msg + "</b>";
+                    document.getElementById("log").appendChild(item);
+                },
+                fail: function (status) {
+                    // 此处放失败后执行的代码
+                }
+            });
+        };
+        //开启服务
+        function openService() {
+            window.location.href = "reader://";
+            return false;
+        };
+
+        //关闭服务
+        function closeService() {
+            ajax({
+                url: "http://127.0.0.1:9000",              //请求地址
+                type: "POST",                       //请求方式
+                data: { action: "--Close" },        //请求参数
+                dataType: "json",
+                success: function (response, xml) {
+                    // 此处放成功后执行的代码
+                    var ret = JSON.parse(response)
+                    var item = document.createElement("div");
+                    item.innerHTML = "<b>" + ret.msg + "</b>";
+                    document.getElementById("log").appendChild(item);
+                },
+                fail: function (status) {
+                    // 此处放失败后执行的代码
+                }
+            });
+        };
+
+        //读二代证
+        function readIDCard() {
+            ajax({
+                url: "http://127.0.0.1:9000",              //请求地址
+                type: "POST",                       //请求方式
+                data: { action: "--ReadCard" },        //请求参数
+                dataType: "json",
+                success: function (response, xml) {
+                    // 此处放成功后执行的代码
+                    var ret = JSON.parse(response)
+                    showInfo(ret)
+                },
+                fail: function (status) {
+                    // 此处放失败后执行的代码
+                }
+            });
+
+        };
+
+        //清空信息
+        function clearInfo() {
+            document.getElementById("text_name").value = "";
+            document.getElementById("text_sex").value = "";
+            document.getElementById("text_nation").value = "";
+            document.getElementById("text_birthday").value = "";
+            document.getElementById("text_address").value = "";
+            document.getElementById("text_idNum").value = "";
+            document.getElementById("text_dept").value = "";
+            document.getElementById("text_effDate").value = "";
+            document.getElementById("text_expDate").value = "";
+            document.getElementById("text_result").value = "";
+            document.getElementById("PhotoID").src = "";
+        }
+
+        //显示卡信息
+        function showInfo(ret) {
+            var item = document.createElement("div");
+            if (ret.ret != 1) {
+                var item = document.createElement("div");
+                item.innerHTML = "<b>" + ret.msg + "</b>";
+                document.getElementById("log").appendChild(item);
+            } else if (ret.msg == "--ReadCard") {
+                clearInfo();
+                document.getElementById("text_name").value = ret.data.name;
+                document.getElementById("text_sex").value = ret.data.gender;
+                document.getElementById("text_nation").value = ret.data.folk;
+                document.getElementById("text_birthday").value = ret.data.birthDay;
+                document.getElementById("text_address").value = ret.data.address;
+                document.getElementById("text_idNum").value = ret.data.code;
+                document.getElementById("text_dept").value = ret.data.agency;
+                document.getElementById("text_effDate").value = ret.data.eexpireEnd;
+                document.getElementById("text_expDate").value = ret.data.expireStart;
+                document.getElementById("text_result").value = JSON.stringify(ret);
+                document.getElementById("PhotoID").src = ret.data.photo;
+            }
+        }
+
+        function ajax(options) {
+            options = options || {};
+            options.type = (options.type || "GET").toUpperCase();
+            options.dataType = options.dataType || "json";
+            var params = formatParams(options.data);
+
+            //创建 - 非IE6 - 第一步
+            if (window.XMLHttpRequest) {
+                var xhr = new XMLHttpRequest();
+            } else { //IE6及其以下版本浏览器
+                var xhr = new ActiveXObject('Microsoft.XMLHTTP');
+            }
+
+            //接收 - 第三步
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState == 4) {
+                    var status = xhr.status;
+                    if (status >= 200 && status < 300) {
+                        options.success && options.success(xhr.responseText, xhr.responseXML);
+                    } else {
+                        options.fail && options.fail(status);
+                    }
+                }
+            }
+
+            //连接 和 发送 - 第二步
+            if (options.type == "GET") {
+                xhr.open("GET", options.url + "?" + params, true);
+                xhr.send(null);
+            } else if (options.type == "POST") {
+                xhr.open("POST", options.url, true);
+                //设置表单提交时的内容类型
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.send(params);
+            }
+        }
+
+        //格式化参数
+        function formatParams(data) {
+            var arr = [];
+            for (var name in data) {
+                arr.push(encodeURIComponent(name) + "=" + encodeURIComponent(data[name]));
+            }
+            arr.push(("v=" + Math.random()).replace(".", ""));
+            return arr.join("&");
+        }
+    </script>
+    <style type="text/css">
+        html {
+            overflow: hidden;
+        }
+
+        body {
+            overflow: hidden;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: gray;
+        }
+
+        #log {
+            background: white;
+            margin: 0;
+            padding: 0.5em 0.5em 0.5em 0.5em;
+            position: absolute;
+            top: 0.5em;
+            left: 0.5em;
+            right: 0.5em;
+            bottom: 3em;
+            overflow: auto;
+        }
+
+        #form {
+            padding: 0 0.5em 0 0.5em;
+            margin: 0;
+            position: absolute;
+            bottom: 1em;
+            left: 0px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+    </style>
+</head>
+<body>
+<div id="log">
+    <p align="center">
+        <a><strong>身份证阅读器Web版</strong></a>
+    </p>
+    <table width="750px" border="0" cellspacing="1" cellpadding="2" align="center" bgcolor="#FFFFFF">
+        <tr>
+            <td colspan="3" align="center">
+                <input class="butt" type="button" name="openService" value="开启服务" onClick="openService();">
+                <input class="butt" type="button" name="closeService" value="关闭服务" onClick="closeService();">
+                <input class="butt" type="button" name="readIDCard" value="读二代证" onClick="readIDCard();">
+                <input class="butt" type="button" name="openCamera" value="打开摄像头" onClick="openCamera();">
+                <input class="butt" type="button" name="closeCamera" value="关闭摄像头" onClick="closeCamera();">
+                <input class="butt" type="button" name="clearInfo" value="清空信息" onClick="clearInfo();">
+            </td>
+        </tr>
+
+        <tr>
+            <td class="title">姓名：</td>
+            <td width="430px">
+                <input type="text" name="text_name" id="text_name" value="" readonly>
+            </td>
+            <td rowspan="7" align="center">
+                <img id="Capture" name="Photo" style="width:96px; height:118px;"/>
+                <img id="PhotoID" name="Photo" style="width:96px; height:118px;"/>
+            </td>
+
+        </tr>
+        <tr>
+            <td class="title">性别：</td>
+            <td>
+                <input type="text" name="text_sex" id="text_sex" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">民族：</td>
+            <td>
+                <input type="text" name="text_nation" id="text_nation" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">出生：</td>
+            <td>
+                <input type="text" name="text_birthday" id="text_birthday" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">地址：</td>
+            <td>
+                <input type="text" name="text_address" id="text_address" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">身份证号：</td>
+            <td colspan="2">
+                <input type="text" name="text_idNum" id="text_idNum" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">签发机关：</td>
+            <td colspan="2">
+                <input type="text" name="text_dept" id="text_dept" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">开始期限：</td>
+            <td colspan="2">
+                <input type="text" name="text_effDate" id="text_effDate" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">结束期限：</td>
+            <td colspan="2">
+                <input type="text" name="text_expDate" id="text_expDate" value="" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td class="title">返回数据：</td>
+            <td colspan="2">
+                <textarea id="text_result" rows="15" name="text_result" id="text_result"
+                          style="color:#FF0000;width:94.3%;" cols="70" readonly></textarea>
+            </td>
+        </tr>
+    </table>
+</div>
+</body>
+</html>
